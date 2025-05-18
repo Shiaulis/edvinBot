@@ -3,10 +3,11 @@
 fetch_raid_participants.py
 
 Download participants data from RAID URL, filter by status (case-insensitive),
-print a plain, alphabetically sorted list of participant names,
+print a grouped list of participant names under each status,
 or list available categories with -c.
 If no statuses are specified, all statuses are included.
 Wrong statuses are simply ignored (no output for them).
+Supports --url/-u flag for specifying the RAID Helper URL.
 """
 import sys
 import argparse
@@ -20,7 +21,8 @@ def parse_args():
         description="Fetch RAID participants and print names filtered by status."
     )
     parser.add_argument(
-        "url",
+        "-u", "--url",
+        required=True,
         help="The Raid Helper URL returning JSON"
     )
     parser.add_argument(
@@ -61,21 +63,25 @@ def print_categories(categories: dict):
         print(status)
 
 
-def print_plain_list(categories: dict, wanted: list[str] | None):
+def print_grouped_list(categories: dict, wanted: list[str] | None):
     # Determine which statuses to include: either user-specified or all
     if wanted:
-        to_show = [st for st in categories.keys() if st.lower() in wanted]
+        to_show = [s for s in sorted(categories.keys()) if s in wanted]
     else:
-        to_show = list(categories.keys())
+        to_show = sorted(categories.keys())
 
-    # Collect names for the chosen statuses
-    names = []
-    for st in to_show:
-        names.extend(categories.get(st, []))
-
-    # Print sorted, plain list (no warnings for wrong statuses)
-    for name in sorted(names):
-        print(name)
+    # Print each group and its participants
+    for status in to_show:
+        participants = sorted(categories.get(status, []))
+        if not participants:
+            continue
+        # Header for the status group
+        print(f"{status}:")
+        # List each participant on its own line
+        for name in participants:
+            print(f"  {name}")
+        # Blank line between groups
+        print()
 
 
 def main():
@@ -87,8 +93,9 @@ def main():
         print_categories(cats)
         sys.exit(0)
 
-    print_plain_list(cats, args.status)
+    print_grouped_list(cats, args.status)
 
 
 if __name__ == "__main__":
     main()
+
