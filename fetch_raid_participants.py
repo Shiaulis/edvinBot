@@ -3,7 +3,7 @@
 fetch_raid_participants.py
 
 Download participants data from RAID URL, filter by status (case-insensitive),
-print a grouped list of participant names under each status,
+print a sorted two-column list: name and group/category,
 or list available categories with -c.
 If no statuses are specified, all statuses are included.
 Wrong statuses are simply ignored (no output for them).
@@ -18,7 +18,7 @@ JSON_KEY = "signUps"
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Fetch RAID participants and print names filtered by status."
+        description="Fetch RAID participants and print two-column list of names and categories."
     )
     parser.add_argument(
         "-u", "--url",
@@ -63,25 +63,18 @@ def print_categories(categories: dict):
         print(status)
 
 
-def print_grouped_list(categories: dict, wanted: list[str] | None):
-    # Determine which statuses to include: either user-specified or all
-    if wanted:
-        to_show = [s for s in sorted(categories.keys()) if s in wanted]
-    else:
-        to_show = sorted(categories.keys())
-
-    # Print each group and its participants
-    for status in to_show:
-        participants = sorted(categories.get(status, []))
-        if not participants:
+def print_two_columns(categories: dict, wanted: list[str] | None):
+    # Build list of (name, status) tuples
+    rows = []
+    for status, names in categories.items():
+        if wanted and status not in wanted:
             continue
-        # Header for the status group
-        print(f"{status}:")
-        # List each participant on its own line
-        for name in participants:
-            print(f"  {name}")
-        # Blank line between groups
-        print()
+        for name in names:
+            rows.append((name, status))
+
+    # Sort rows by name then status
+    for name, status in sorted(rows, key=lambda x: (x[0].lower(), x[1])):
+        print(f"{name}\t{status}")
 
 
 def main():
@@ -93,9 +86,8 @@ def main():
         print_categories(cats)
         sys.exit(0)
 
-    print_grouped_list(cats, args.status)
+    print_two_columns(cats, args.status)
 
 
 if __name__ == "__main__":
     main()
-
