@@ -2,91 +2,91 @@
 """
 fetch_raid_participants.py
 
-Download participants data from RAID URL, filter by status (case-insensitive),
-print a sorted two-column list: name and group/category,
-or list available categories with -c.
-If no statuses are specified, all statuses are included.
-Wrong statuses are simply ignored (no output for them).
-Supports --url/-u flag for specifying the RAID Helper URL.
+Download participants data from a Raid-Helper URL and
+
+* Print a two-column list (name, category) in **true signup order**.
+* Filter by one or more statuses, case-insensitive.
+* Show the available categories with -c / --categories.
+
+If no status filters are provided, all sign-ups are shown.
+Unknown statuses are silently ignored.
 """
+
+from __future__ import annotations
 import sys
 import argparse
 import requests
+from typing import List, Dict
 
 JSON_KEY = "signUps"
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Fetch RAID participants and print two-column list of names and categories."
+# ---------- CLI ---------- #
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="Fetch Raid-Helper sign-ups and print a two-column list in signup order."
     )
-    parser.add_argument(
-        "-u", "--url",
-        required=True,
-        help="The Raid Helper URL returning JSON"
-    )
-    parser.add_argument(
-        "-s", "--status",
-        nargs="+",
-        metavar="STATUS",
-        type=str.lower,
-        help=(
-            "One or more statuses to include (e.g. attending tentative absent). "
-            "Case-insensitive. If omitted, all statuses are included."
-        )
-    )
-    parser.add_argument(
-        "-c", "--categories",
-        action="store_true",
-        help="List all existing status categories and exit."
-    )
-    return parser.parse_args()
+    p.add_argument("-u", "--url", required=True,
+                   help="Raid-Helper URL that returns JSON")
+    p.add_argument("-s", "--status", nargs="+", metavar="STATUS",
+                   type=str.lower,
+                   help="Statuses to include (attending tentative absent …). Case-insensitive.")
+    p.add_argument("-c", "--categories", action="store_true",
+                   help="List all existing status categories and exit.")
+    return p.parse_args()
 
 
-def fetch_participants(url: str) -> dict:
-    resp = requests.get(url)
-    resp.raise_for_status()
-    return resp.json()
+# ---------- I/O ---------- #
+
+def fetch_json(url: str) -> Dict:
+    r = requests.get(url, timeout=10)
+    r.raise_for_status()
+    return r.json()
 
 
-def categorize(data: dict) -> dict:
-    statuses: dict[str, list[str]] = {}
-    for entry in data.get(JSON_KEY, []):
-        name = entry.get("name", "")
+# ---------- Helpers ---------- #
+
+def collect_categories(signups: List[Dict]) -> Dict[str, List[str]]:
+    """Map each status to the list of names that chose it (keeps order within a status)."""
+    cats: Dict[str, List[str]] = {}
+    for entry in signups:
         status = entry.get("className", "").lower()
-        statuses.setdefault(status, []).append(name)
-    return statuses
+        cats.setdefault(status, []).append(entry.get("name", ""))
+    return cats
 
 
-def print_categories(categories: dict):
-    for status in sorted(categories.keys()):
+def print_categories(cats: Dict[str, List[str]]) -> None:
+    for status in sorted(cats):
         print(status)
 
 
-def print_two_columns(categories: dict, wanted: list[str] | None):
-    # Build list of (name, status) tuples
-    rows = []
-    for status, names in categories.items():
+def print_rows_in_signup_order(signups: List[Dict], wanted: List[str] | None) -> None:
+    # True signup sequence = ascending position; fall back to entryTime if position missing
+    signups = sorted(
+        signups, key=lambda e: (e.get("position", 10**9), e.get("entryTime", 0))
+    )
+    for entry in signups:
+        status = entry.get("className", "").lower()
         if wanted and status not in wanted:
             continue
-        for name in names:
-            rows.append((name, status))
-
-    # Sort rows by name then status
-    for name, status in sorted(rows, key=lambda x: (x[0].lower(), x[1])):
+        name = entry.get("name", "")
         print(f"{name}\t{status}")
 
 
-def main():
+# ---------- Main ---------- #
+
+def main() -> None:
     args = parse_args()
-    raw = fetch_participants(args.url)
-    cats = categorize(raw)
+
+    data = fetch_json(args.url)
+    signups: List[Dict] = data.get(JSON_KEY, [])
 
     if args.categories:
-        print_categories(cats)
-        sys.exit(0)
+        print_categories(collect_categories(signups))
+        return
 
-    print_two_columns(cats, args.status)
+    print_rows_in_signup_order(signups, args.status)
 
 
 if __name__ == "__main__":
