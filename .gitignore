@@ -1,0 +1,22 @@
+# Environment variables
+.env
+
+# Python virtual environment
+env/
+myenv/
+venv/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# OS files
+.DS_Store
