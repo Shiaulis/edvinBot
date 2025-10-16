@@ -97,13 +97,25 @@ async def raid_list(interaction: discord.Interaction, url: str):
 
 def main():
     """Run the bot."""
+    print("Starting bot...")
+    print(f"Environment variables available: {', '.join([k for k in os.environ.keys() if 'DISCORD' in k or 'RAILWAY' in k])}")
+
     token = os.getenv("DISCORD_BOT_TOKEN")
     if not token:
         print("Error: DISCORD_BOT_TOKEN not found in environment variables")
         print("Create a .env file with: DISCORD_BOT_TOKEN=your_token_here")
+        print("Available env vars:", list(os.environ.keys()))
         return
 
-    bot.run(token)
+    print(f"Token found: {token[:20]}..." if len(token) > 20 else "Token found but too short")
+    print("Connecting to Discord...")
+
+    try:
+        bot.run(token)
+    except discord.LoginFailure:
+        print("Error: Invalid bot token. Please check your DISCORD_BOT_TOKEN in Railway variables.")
+    except Exception as e:
+        print(f"Error starting bot: {type(e).__name__}: {str(e)}")
 
 
 if __name__ == "__main__":
