@@ -18,7 +18,8 @@ load_dotenv()
 
 # Bot setup - minimal intents for slash commands only
 intents = discord.Intents.none()
-intents.guilds = True  # Required for slash commands to work
+intents.guilds = True  # Required for slash commands in guilds
+intents.dm_messages = True  # Required for DM interactions
 
 class RaidBot(discord.Client):
     def __init__(self):
