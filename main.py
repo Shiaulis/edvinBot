@@ -8,6 +8,7 @@ Discord bot that fetches Raid-Helper participants and posts them in signup order
 import os
 import io
 import logging
+import time
 import discord
 from discord import app_commands
 import aiohttp
@@ -35,6 +36,7 @@ class RaidBot(discord.Client):
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
         self.session = None
+        self.last_request_time: dict[int, float] = {}  # Track last request time per user ID
 
     async def setup_hook(self):
         # Create persistent HTTP session with connection pooling
@@ -56,6 +58,7 @@ bot = RaidBot()
 JSON_KEY = "signUps"
 MAX_POSITION_FALLBACK = 10**9  # Fallback for missing position values
 RAID_HELPER_DOMAIN = "raid-helper.dev"
+RATE_LIMIT_SECONDS = 10  # Minimum seconds between requests per user
 
 
 async def fetch_json(session: aiohttp.ClientSession, url: str) -> dict[str, Any]:
@@ -76,13 +79,15 @@ def format_participants(signups: list[dict[str, Any]]) -> str:
     )
 
 
-def get_class_stats(signups: list[dict[str, Any]]) -> dict[str, int]:
-    """Count participants by class."""
-    stats = {}
-    for entry in signups:
-        class_name = entry.get("className", "unknown")
-        stats[class_name] = stats.get(class_name, 0) + 1
-    return stats
+def sanitize_filename(title: str, date: str) -> str:
+    """Create a safe filename from event title and date."""
+    # Remove or replace unsafe characters
+    safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
+    safe_title = safe_title.strip().replace(' ', '_')
+    # Limit length
+    if len(safe_title) > 50:
+        safe_title = safe_title[:50]
+    return f"{safe_title}_{date}.txt" if safe_title else f"raid_{date}.txt"
 
 
 @bot.event
@@ -103,11 +108,26 @@ async def raid_list(interaction: discord.Interaction, url: str):
     await interaction.response.defer()
 
     try:
+        # Check rate limiting
+        user_id = interaction.user.id
+        current_time = time.time()
+        last_request = bot.last_request_time.get(user_id, 0)
+        time_since_last = current_time - last_request
+
+        if time_since_last < RATE_LIMIT_SECONDS:
+            wait_time = int(RATE_LIMIT_SECONDS - time_since_last)
+            await interaction.followup.send(f"Please wait {wait_time} seconds before requesting again.")
+            logger.info(f"Rate limit hit for {interaction.user.name}")
+            return
+
         # Validate URL is from raid-helper.dev
         if RAID_HELPER_DOMAIN not in url.lower():
             await interaction.followup.send(f"Invalid URL. Please provide a {RAID_HELPER_DOMAIN} URL.")
             logger.warning(f"Invalid URL rejected from {interaction.user.name}: {url}")
             return
+
+        # Update last request time
+        bot.last_request_time[user_id] = current_time
 
         # Fetch data using persistent session
         data = await fetch_json(bot.session, url)
@@ -125,12 +145,17 @@ async def raid_list(interaction: discord.Interaction, url: str):
             await interaction.followup.send("No participants found in this raid.")
             return
 
+        # Get event metadata for filename
+        event_title = data.get("title", "raid")
+        event_date = data.get("date", "unknown")
+        filename = sanitize_filename(event_title, event_date)
+
         # Format output
         formatted = format_participants(signups)
 
         # Create file attachment with tab-separated values
         file_buffer = io.BytesIO(formatted.encode('utf-8'))
-        file = discord.File(file_buffer, filename="raid_participants.txt")
+        file = discord.File(file_buffer, filename=filename)
 
         await interaction.followup.send(
             f"Found {len(signups)} participants:",
@@ -138,14 +163,29 @@ async def raid_list(interaction: discord.Interaction, url: str):
         )
         logger.info(f"Successfully sent {len(signups)} participants to {interaction.user.name}")
 
-    except aiohttp.ClientError as e:
-        error_msg = f"Failed to fetch data: {str(e)}"
-        logger.error(f"HTTP error for {interaction.user.name}: {error_msg}")
+    except aiohttp.ClientResponseError as e:
+        # Handle specific HTTP error codes
+        if e.status == 404:
+            error_msg = "Event not found. Please check the URL and try again."
+        elif e.status == 403:
+            error_msg = "Access denied. The event may be private."
+        elif e.status == 429:
+            error_msg = "Rate limited by raid-helper. Please try again later."
+        elif e.status >= 500:
+            error_msg = "Raid-helper server error. Please try again later."
+        else:
+            error_msg = f"Failed to fetch data (HTTP {e.status})"
+
+        logger.error(f"HTTP {e.status} error for {interaction.user.name}: {url}")
         await interaction.followup.send(error_msg)
+    except aiohttp.ClientError as e:
+        error_msg = f"Network error: {str(e)}"
+        logger.error(f"Network error for {interaction.user.name}: {error_msg}")
+        await interaction.followup.send("Network error. Please check the URL and try again.")
     except Exception as e:
         error_msg = f"An error occurred: {str(e)}"
         logger.error(f"Unexpected error for {interaction.user.name}: {error_msg}", exc_info=True)
-        await interaction.followup.send(error_msg)
+        await interaction.followup.send("An unexpected error occurred. Please try again later.")
 
 
 def main():
