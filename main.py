@@ -66,6 +66,10 @@ async def on_ready():
 @app_commands.describe(url="Raid-Helper JSON URL")
 async def raid_list(interaction: discord.Interaction, url: str):
     """Slash command to fetch raid participants."""
+    # Log the request
+    location = f"Guild: {interaction.guild.name}" if interaction.guild else "DM"
+    print(f"[RAID-LIST] Request from {interaction.user.name} in {location} | URL: {url}")
+
     await interaction.response.defer()
 
     try:
@@ -97,18 +101,12 @@ async def raid_list(interaction: discord.Interaction, url: str):
 
 def main():
     """Run the bot."""
-    print("Starting bot...")
-    print(f"Environment variables available: {', '.join([k for k in os.environ.keys() if 'DISCORD' in k or 'RAILWAY' in k])}")
-
     token = os.getenv("DISCORD_BOT_TOKEN")
     if not token:
         print("Error: DISCORD_BOT_TOKEN not found in environment variables")
-        print("Create a .env file with: DISCORD_BOT_TOKEN=your_token_here")
-        print("Available env vars:", list(os.environ.keys()))
         return
 
-    print(f"Token found: {token[:20]}..." if len(token) > 20 else "Token found but too short")
-    print("Connecting to Discord...")
+    print("Starting bot...")
 
     try:
         bot.run(token)
