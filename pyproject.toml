@@ -9,9 +9,9 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "discord (>=2.3.2,<3.0.0)",
     "aiohttp (>=3.11.11,<4.0.0)",
-    "python-dotenv (>=1.1.1,<2.0.0)"
+    "python-dotenv (>=1.1.1,<2.0.0)",
+    "discord-py (>=2.6.4,<3.0.0)"
 ]
 
 [tool.poetry]
