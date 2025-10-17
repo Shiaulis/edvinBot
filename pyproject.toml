@@ -1,0 +1,22 @@
+[project]
+name = "edvinbot"
+version = "0.1.0"
+description = "Discord Bot to get RAID list"
+license = "MIT"
+readme = "README.md"
+authors = [
+    {name = "Andrius Shiaulis",email = "shiaulis@gmail.com"}
+]
+requires-python = ">=3.14"
+dependencies = [
+    "discord (>=2.3.2,<3.0.0)",
+    "requests (>=2.32.5,<3.0.0)",
+    "python-dotenv (>=1.1.1,<2.0.0)"
+]
+
+[tool.poetry]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
