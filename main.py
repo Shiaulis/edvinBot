@@ -66,7 +66,7 @@ async def fetch_json(session: aiohttp.ClientSession, url: str) -> dict[str, Any]
 
 
 def format_participants(signups: list[dict[str, Any]]) -> str:
-    """Format participants list in signup order with name and status."""
+    """Format participants list in signup order with name and class (tab-separated)."""
     # Sort by position (ascending), fall back to entryTime if position missing
     signups = sorted(signups, key=lambda e: (e.get("position", MAX_POSITION_FALLBACK), e.get("entryTime", 0)))
 
@@ -74,6 +74,15 @@ def format_participants(signups: list[dict[str, Any]]) -> str:
         f"{entry.get('name', 'Unknown')}\t{entry.get('className', 'unknown')}"
         for entry in signups
     )
+
+
+def get_class_stats(signups: list[dict[str, Any]]) -> dict[str, int]:
+    """Count participants by class."""
+    stats = {}
+    for entry in signups:
+        class_name = entry.get("className", "unknown")
+        stats[class_name] = stats.get(class_name, 0) + 1
+    return stats
 
 
 @bot.event
@@ -102,6 +111,13 @@ async def raid_list(interaction: discord.Interaction, url: str):
 
         # Fetch data using persistent session
         data = await fetch_json(bot.session, url)
+
+        # Validate JSON structure
+        if not isinstance(data, dict):
+            logger.error(f"Invalid JSON structure: expected dict, got {type(data)}")
+            await interaction.followup.send("Invalid data format received from raid-helper.")
+            return
+
         signups: list[dict[str, Any]] = data.get(JSON_KEY, [])
 
         if not signups:
