@@ -18,6 +18,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Suppress PyNaCl warning - voice is not used in this bot
+discord.VoiceClient.warn_nacl = False
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -31,12 +34,14 @@ intents = discord.Intents.none()
 intents.guilds = True  # Required for slash commands in guilds
 intents.dm_messages = True  # Required for DM interactions
 
+
 class RaidBot(discord.Client):
     def __init__(self):
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
         self.session = None
-        self.last_request_time: dict[int, float] = {}  # Track last request time per user ID
+        # Track last request time per user ID
+        self.last_request_time: dict[int, float] = {}
 
     async def setup_hook(self):
         # Create persistent HTTP session with connection pooling
@@ -51,6 +56,7 @@ class RaidBot(discord.Client):
         if self.session:
             await self.session.close()
         await super().close()
+
 
 bot = RaidBot()
 
@@ -71,7 +77,8 @@ async def fetch_json(session: aiohttp.ClientSession, url: str) -> dict[str, Any]
 def format_participants(signups: list[dict[str, Any]]) -> str:
     """Format participants list in signup order with name and class (tab-separated)."""
     # Sort by position (ascending), fall back to entryTime if position missing
-    signups = sorted(signups, key=lambda e: (e.get("position", MAX_POSITION_FALLBACK), e.get("entryTime", 0)))
+    signups = sorted(signups, key=lambda e: (
+        e.get("position", MAX_POSITION_FALLBACK), e.get("entryTime", 0)))
 
     return "\n".join(
         f"{entry.get('name', 'Unknown')}\t{entry.get('className', 'unknown')}"
@@ -82,7 +89,8 @@ def format_participants(signups: list[dict[str, Any]]) -> str:
 def sanitize_filename(title: str, date: str) -> str:
     """Create a safe filename from event title and date."""
     # Remove or replace unsafe characters
-    safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
+    safe_title = "".join(c if c.isalnum() or c in (
+        ' ', '-', '_') else '_' for c in title)
     safe_title = safe_title.strip().replace(' ', '_')
     # Limit length
     if len(safe_title) > 50:
@@ -93,6 +101,12 @@ def sanitize_filename(title: str, date: str) -> str:
 @bot.event
 async def on_ready():
     """Called when bot is ready."""
+    await bot.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.listening,
+            name="commands"
+        )
+    )
     logger.info(f"Logged in as {bot.user}")
     logger.info(f"Synced {len(bot.tree.get_commands())} command(s)")
 
@@ -103,7 +117,8 @@ async def raid_list(interaction: discord.Interaction, url: str):
     """Slash command to fetch raid participants."""
     # Log the request
     location = f"Guild: {interaction.guild.name}" if interaction.guild else "DM"
-    logger.info(f"[RAID-LIST] Request from {interaction.user.name} in {location} | URL: {url}")
+    logger.info(
+        f"[RAID-LIST] Request from {interaction.user.name} in {location} | URL: {url}")
 
     await interaction.response.defer()
 
@@ -123,7 +138,8 @@ async def raid_list(interaction: discord.Interaction, url: str):
         # Validate URL is from raid-helper.dev
         if RAID_HELPER_DOMAIN not in url.lower():
             await interaction.followup.send(f"Invalid URL. Please provide a {RAID_HELPER_DOMAIN} URL.")
-            logger.warning(f"Invalid URL rejected from {interaction.user.name}: {url}")
+            logger.warning(
+                f"Invalid URL rejected from {interaction.user.name}: {url}")
             return
 
         # Update last request time
@@ -134,7 +150,8 @@ async def raid_list(interaction: discord.Interaction, url: str):
 
         # Validate JSON structure
         if not isinstance(data, dict):
-            logger.error(f"Invalid JSON structure: expected dict, got {type(data)}")
+            logger.error(
+                f"Invalid JSON structure: expected dict, got {type(data)}")
             await interaction.followup.send("Invalid data format received from raid-helper.")
             return
 
@@ -161,7 +178,8 @@ async def raid_list(interaction: discord.Interaction, url: str):
             f"Found {len(signups)} participants:",
             file=file
         )
-        logger.info(f"Successfully sent {len(signups)} participants to {interaction.user.name}")
+        logger.info(
+            f"Successfully sent {len(signups)} participants to {interaction.user.name}")
 
     except aiohttp.ClientResponseError as e:
         # Handle specific HTTP error codes
@@ -176,7 +194,8 @@ async def raid_list(interaction: discord.Interaction, url: str):
         else:
             error_msg = f"Failed to fetch data (HTTP {e.status})"
 
-        logger.error(f"HTTP {e.status} error for {interaction.user.name}: {url}")
+        logger.error(
+            f"HTTP {e.status} error for {interaction.user.name}: {url}")
         await interaction.followup.send(error_msg)
     except aiohttp.ClientError as e:
         error_msg = f"Network error: {str(e)}"
@@ -184,7 +203,8 @@ async def raid_list(interaction: discord.Interaction, url: str):
         await interaction.followup.send("Network error. Please check the URL and try again.")
     except Exception as e:
         error_msg = f"An error occurred: {str(e)}"
-        logger.error(f"Unexpected error for {interaction.user.name}: {error_msg}", exc_info=True)
+        logger.error(
+            f"Unexpected error for {interaction.user.name}: {error_msg}", exc_info=True)
         await interaction.followup.send("An unexpected error occurred. Please try again later.")
 
 
@@ -200,9 +220,11 @@ def main():
     try:
         bot.run(token)
     except discord.LoginFailure:
-        logger.error("Invalid bot token. Please check your DISCORD_BOT_TOKEN in Railway variables.")
+        logger.error(
+            "Invalid bot token. Please check your DISCORD_BOT_TOKEN in Railway variables.")
     except Exception as e:
-        logger.error(f"Error starting bot: {type(e).__name__}: {str(e)}", exc_info=True)
+        logger.error(
+            f"Error starting bot: {type(e).__name__}: {str(e)}", exc_info=True)
 
 
 if __name__ == "__main__":
