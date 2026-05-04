@@ -9,6 +9,7 @@ import os
 import io
 import logging
 import time
+from urllib.parse import urlparse
 import discord
 from discord import app_commands
 import aiohttp
@@ -63,8 +64,21 @@ bot = RaidBot()
 # Constants
 JSON_KEY = "signUps"
 MAX_POSITION_FALLBACK = 10**9  # Fallback for missing position values
-RAID_HELPER_DOMAIN = "raid-helper.dev"
+RAID_HELPER_DOMAINS = ("raid-helper.xyz", "raid-helper.dev")
 RATE_LIMIT_SECONDS = 10  # Minimum seconds between requests per user
+
+
+def is_raid_helper_url(url: str) -> bool:
+    """Validate that the URL points to an allowed Raid-Helper host."""
+    parsed_url = urlparse(url)
+    hostname = parsed_url.hostname.lower() if parsed_url.hostname else ""
+
+    is_allowed_host = any(
+        hostname == domain or hostname.endswith(f".{domain}")
+        for domain in RAID_HELPER_DOMAINS
+    )
+
+    return parsed_url.scheme in ("http", "https") and is_allowed_host
 
 
 async def fetch_json(session: aiohttp.ClientSession, url: str) -> dict[str, Any]:
@@ -135,9 +149,10 @@ async def raid_list(interaction: discord.Interaction, url: str):
             logger.info(f"Rate limit hit for {interaction.user.name}")
             return
 
-        # Validate URL is from raid-helper.dev
-        if RAID_HELPER_DOMAIN not in url.lower():
-            await interaction.followup.send(f"Invalid URL. Please provide a {RAID_HELPER_DOMAIN} URL.")
+        # Validate URL is from a known Raid-Helper host
+        if not is_raid_helper_url(url):
+            allowed_domains = ", ".join(RAID_HELPER_DOMAINS)
+            await interaction.followup.send(f"Invalid URL. Please provide a Raid-Helper URL from: {allowed_domains}.")
             logger.warning(
                 f"Invalid URL rejected from {interaction.user.name}: {url}")
             return
